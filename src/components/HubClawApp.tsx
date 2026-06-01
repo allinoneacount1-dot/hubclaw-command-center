@@ -260,6 +260,10 @@ function Workspace({ agent, onBack }: { agent: Agent; onBack: () => void }) {
   };
 
   const timers = useRef<number[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [msgs, running]);
   useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
 
   const buildPlan = (query: string) => {
