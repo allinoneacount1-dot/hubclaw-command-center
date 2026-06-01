@@ -259,19 +259,79 @@ function Workspace({ agent, onBack }: { agent: Agent; onBack: () => void }) {
     setTimeout(() => setCopied(false), 1600);
   };
 
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
+
+  const buildPlan = (query: string) => {
+    const q = query.toLowerCase();
+    const active: string[] = [];
+    if (tools.web) active.push("Web Search API");
+    if (tools.py) active.push("Python Sandbox");
+    if (tools.gh && /(repo|commit|branch|pull|pr|github)/.test(q)) active.push("GitHub Repo Manager");
+    if (tools.dc && /(notify|alert|discord|channel)/.test(q)) active.push("Discord Webhook");
+    if (active.length === 0) active.push("LLM Reasoner");
+
+    const steps = [
+      { ms: 320, text: `Parsing directive · ${query.length} tokens · routing through ${model}` },
+      { ms: 520, text: `Planner resolved ${active.length}-step pipeline: [${active.join(" → ")}]` },
+      ...active.map((tool, i) => ({
+        ms: 520 + i * 480 + Math.round(Math.random() * 200),
+        text: tool === "Web Search API"
+          ? `Web Search · issued query "${query.slice(0, 48)}${query.length > 48 ? "…" : ""}" · 4 sources retrieved in ${180 + Math.floor(Math.random() * 120)}ms`
+          : tool === "Python Sandbox"
+          ? `Python Sandbox · executing analysis.py · numpy 1.26, pandas 2.2 · returned dataframe(${50 + Math.floor(Math.random() * 400)}, 6)`
+          : tool === "GitHub Repo Manager"
+          ? `GitHub · fetched HEAD of main · diff against last 3 commits · 0 conflicts`
+          : tool === "Discord Webhook"
+          ? `Discord Webhook · payload signed · POST channel#agent-ops · 204 No Content`
+          : `LLM Reasoner · ${Math.floor(temp * 100)}°C · ${maxTok} max tokens · drafting response`,
+      })),
+      { ms: 420, text: `Synthesizing structured payload · total latency ${1200 + Math.floor(Math.random() * 600)}ms` },
+    ];
+
+    const responses: Record<string, string> = {
+      chart: "Rendered chart from sandbox dataframe. Top region NA (+18%), EMEA flat, APAC +34% QoQ. Confidence 0.92 — full breakdown stored at /artifacts/chart-q4.png.",
+      revenue: "FY24-Q4 revenue: NA $4.21M (+18%), EMEA $3.07M (-0.3%), APAC $2.41M (+34%). Forecast Q1 mid-point $10.4M ±6%.",
+      bug: "Reproduced the issue on branch main@8a4f12. Root cause: race in useEffect cleanup. Patch drafted at /tmp/fix-race.diff (3 files, +12 / -4).",
+      summarize: "Synthesized 4 sources into 5-bullet brief. Sentiment: cautiously positive. Two citations flagged as low-confidence — see footnotes.",
+      deploy: "Built artifact 24.06.01 (3.2MB) and queued Vercel deployment. Preview URL will be returned on completion in ~40s.",
+    };
+    const key = Object.keys(responses).find((k) => q.includes(k));
+    const final = key
+      ? responses[key]
+      : `Completed "${query.slice(0, 60)}${query.length > 60 ? "…" : ""}". Returned a structured payload assembled from ${active.length} tool call${active.length > 1 ? "s" : ""}. Confidence 0.88.`;
+
+    return { steps, final };
+  };
+
   const send = () => {
-    if (!input.trim()) return;
-    const id = Date.now();
-    setMsgs((m) => [...m, { id, role: "user", text: input }]);
+    const text = input.trim();
+    if (!text || running) return;
+
+    const baseId = Date.now();
+    setMsgs((m) => [...m, { id: baseId, role: "user", text }]);
     setInput("");
     setRunning(true);
-    setTimeout(() => {
-      setMsgs((m) => [...m, { id: id + 1, role: "log", text: "Initializing system functions [Web Search API]…" }]);
-    }, 400);
-    setTimeout(() => {
-      setMsgs((m) => [...m, { id: id + 2, role: "agent", text: "Synthesizing response… data fused from 3 sources, latency 240ms. Returning structured payload." }]);
+
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+
+    const { steps, final } = buildPlan(text);
+    let cursor = 0;
+    steps.forEach((s, i) => {
+      cursor += s.ms;
+      const t = window.setTimeout(() => {
+        setMsgs((m) => [...m, { id: baseId + 1 + i, role: "log", text: s.text }]);
+      }, cursor);
+      timers.current.push(t);
+    });
+
+    cursor += 700;
+    const finalTimer = window.setTimeout(() => {
+      setMsgs((m) => [...m, { id: baseId + 1000, role: "agent", text: final }]);
       setRunning(false);
-    }, 2000);
+    }, cursor);
+    timers.current.push(finalTimer);
   };
 
   return (
