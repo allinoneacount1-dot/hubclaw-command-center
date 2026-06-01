@@ -483,7 +483,7 @@ function Workspace({ agent, onBack }: { agent: Agent; onBack: () => void }) {
           dense
         >
           <div className="flex h-[560px] flex-col">
-            <div className="flex-1 space-y-3 overflow-y-auto rounded-lg border border-border bg-background/60 p-4 scrollbar-hidden">
+            <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto rounded-lg border border-border bg-background/60 p-4 scrollbar-hidden">
               <AnimatePresence initial={false}>
                 {msgs.map((m) => (
                   <ChatBubble key={m.id} m={m} />
